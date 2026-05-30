@@ -384,8 +384,23 @@ function getSchedules(p) {
   }).sort((a, b) => a.date.localeCompare(b.date) || a.slotStart.localeCompare(b.slotStart));
 }
 
+function checkMeetingConflict(date, slotId) {
+  const slots = sheetToObjects(getSheet(SHEETS.TIMESLOTS));
+  const slot = slots.filter(function(s) { return s.slotId === slotId; })[0];
+  if (!slot) return;
+  const parts = date.split('-');
+  const day = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])).getDay();
+  const toMins = function(t) { const hm = String(t).split(':'); return parseInt(hm[0]) * 60 + (parseInt(hm[1]) || 0); };
+  const s = toMins(slot.startTime), e = toMins(slot.endTime);
+  if (day === 4 && s < 20 * 60 && e > 18 * 60)
+    throw new Error('Cannot schedule during the midweek meeting (Thursday 6–8 PM)');
+  if (day === 0 && s < 17 * 60 && e > 15 * 60)
+    throw new Error('Cannot schedule during the weekend meeting (Sunday 3–5 PM)');
+}
+
 function createSchedule(p) {
   if (!p.locationId || !p.slotId || !p.date) throw new Error('locationId, slotId, and date are required');
+  checkMeetingConflict(p.date, p.slotId);
   const locSh = getSheet(SHEETS.LOCATIONS);
   const locRow = findRowIndex(locSh, 'locationId', p.locationId);
   if (locRow === -1) throw new Error('Location not found');

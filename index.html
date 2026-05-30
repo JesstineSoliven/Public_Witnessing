@@ -160,9 +160,6 @@ tailwind.config = {
   .anim-fade-up{animation:fadeUp .35s var(--ease-spring) both}
   .spinner{animation:spin .7s linear infinite}
 
-  /* ── Setup banner ── */
-  .setup-banner{background:#FEF3C7;border:1px solid #FDE68A;border-radius:12px;padding:14px 16px;margin:16px;font-size:13px;color:#92400E}
-
   /* ── Progress pill ── */
   .occ-label{font-size:13px;font-weight:600;color:#6B6560}
 
@@ -214,7 +211,6 @@ tailwind.config = {
 // ─────────────────────────────────────────────
 const CONFIG = {
   API_URL: 'https://script.google.com/macros/s/AKfycbx-38IWSDIiViRoVhDoHnn6VUkRjhAC37I58mjwSkFKNMxetbG83PeptItb0DZCTDvBhw/exec',
-  MOCK_MODE: true,
 };
 
 // ─────────────────────────────────────────────
@@ -248,309 +244,12 @@ const STATE = {
   auditPage: 0,
 };
 
-// ─────────────────────────────────────────────
-// MOCK DATA
-// ─────────────────────────────────────────────
-const MOCK = {
-  locations: [
-    { locationId:'LOC-01', name:'Riza Residence',  address:'Monumento Area', capacity:6, mapsUrl:'', isActive:true },
-    { locationId:'LOC-02', name:'Cielo Residence', address:'Monumento Area', capacity:6, mapsUrl:'', isActive:true },
-    { locationId:'LOC-03', name:'DXN Office',      address:'Monumento Area', capacity:6, mapsUrl:'', isActive:true },
-  ],
-  timeSlots: [
-    { slotId:'SLOT-01', label:'Early Morning (6:00–7:00 AM)',  startTime:'06:00', endTime:'07:00', isActive:true, sortOrder:1 },
-    { slotId:'SLOT-02', label:'Morning (7:00–8:00 AM)',         startTime:'07:00', endTime:'08:00', isActive:true, sortOrder:2 },
-    { slotId:'SLOT-03', label:'Early Afternoon (4:00–5:00 PM)', startTime:'16:00', endTime:'17:00', isActive:true, sortOrder:3 },
-    { slotId:'SLOT-04', label:'Afternoon (5:00–6:00 PM)',       startTime:'17:00', endTime:'18:00', isActive:true, sortOrder:4 },
-    { slotId:'SLOT-05', label:'Early Evening (6:00–7:00 PM)',   startTime:'18:00', endTime:'19:00', isActive:true, sortOrder:5 },
-    { slotId:'SLOT-06', label:'Evening (7:00–8:00 PM)',         startTime:'19:00', endTime:'20:00', isActive:true, sortOrder:6 },
-  ],
-};
 
-// Generate schedules around today
-function generateMockSchedules() {
-  const today = new Date();
-  const fmt = d => d.toISOString().split('T')[0];
-  const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate()+n); return x; };
-
-  const raw = [
-    { offset:0,  locId:'LOC-01', slotId:'SLOT-01', seats:3, status:'OPEN' },
-    { offset:0,  locId:'LOC-02', slotId:'SLOT-03', seats:4, status:'OPEN' },
-    { offset:0,  locId:'LOC-03', slotId:'SLOT-05', seats:6, status:'OPEN' },
-    { offset:1,  locId:'LOC-01', slotId:'SLOT-02', seats:5, status:'OPEN' },
-    { offset:1,  locId:'LOC-02', slotId:'SLOT-06', seats:2, status:'OPEN' },
-    { offset:2,  locId:'LOC-03', slotId:'SLOT-01', seats:0, status:'OPEN' },
-    { offset:2,  locId:'LOC-01', slotId:'SLOT-04', seats:6, status:'OPEN' },
-    { offset:3,  locId:'LOC-02', slotId:'SLOT-02', seats:1, status:'OPEN' },
-    { offset:3,  locId:'LOC-03', slotId:'SLOT-03', seats:4, status:'OPEN' },
-    { offset:5,  locId:'LOC-01', slotId:'SLOT-05', seats:0, status:'OPEN' },
-    { offset:7,  locId:'LOC-02', slotId:'SLOT-01', seats:3, status:'OPEN' },
-    { offset:-1, locId:'LOC-01', slotId:'SLOT-01', seats:6, status:'CANCELLED' },
-  ];
-
-  const allParticipants = [];
-  const schedules = raw.map((r, i) => {
-    const loc = MOCK.locations.find(l => l.locationId === r.locId);
-    const slot = MOCK.timeSlots.find(s => s.slotId === r.slotId);
-    const date = fmt(addDays(today, r.offset));
-    const schId = `SCH-${String(i+1).padStart(3,'0')}`;
-    const cap = loc.capacity;
-    const seatsUsed = Math.min(r.seats, cap);
-    const threshold = STATE.config.nearlyFullThreshold;
-    let availabilityStatus = 'AVAILABLE';
-    if (r.status === 'CANCELLED') availabilityStatus = 'CANCELLED';
-    else if (seatsUsed >= cap) availabilityStatus = 'FULL';
-    else if (seatsUsed / cap >= threshold) availabilityStatus = 'NEARLY_FULL';
-
-    // Generate participants
-    const names = ['Maria Santos','Jose Reyes','Ana Cruz','Pedro Lim','Grace Tan','Mark dela Cruz','Luz Bautista','Carlo Ramos'];
-    const participants = [];
-    let filled = 0;
-    for (let p = 0; p < names.length && filled < seatsUsed; p++) {
-      const withComp = (p % 3 === 0 && filled + 2 <= seatsUsed);
-      const seats = withComp ? 2 : 1;
-      if (filled + seats > seatsUsed) break;
-      const pid = `PRT-${schId}-${String(p+1).padStart(2,'0')}`;
-      const pRow = {
-        participantId: pid, scheduleId: schId,
-        name: names[p], companion: withComp ? 'Companion of ' + names[p].split(' ')[0] : '',
-        seatsHeld: seats, status: 'ACTIVE',
-        waitlistPosition: '', joinedAt: new Date(Date.now() - (p*3600000)).toISOString(),
-        cancelledAt:'', promotedAt:''
-      };
-      participants.push(pRow);
-      allParticipants.push(pRow);
-      filled += seats;
-    }
-    // Add waitlisted if full
-    if (seatsUsed >= cap && r.status === 'OPEN') {
-      const wpRow = {
-        participantId:`PRT-${schId}-WL1`, scheduleId:schId,
-        name:'Waiting Person', companion:'', seatsHeld:1, status:'WAITLISTED',
-        waitlistPosition:1, joinedAt: new Date().toISOString(),
-        cancelledAt:'', promotedAt:''
-      };
-      participants.push(wpRow);
-      allParticipants.push(wpRow);
-    }
-
-    return {
-      scheduleId:schId, locationId:r.locId, slotId:r.slotId, date,
-      capacity:cap, seatsUsed, status:r.status,
-      availabilityStatus, locationName:loc.name, locationAddress:loc.address,
-      mapsUrl:loc.mapsUrl, slotLabel:slot.label, slotStart:slot.startTime, slotEnd:slot.endTime,
-      createdBy:'Admin', createdAt:'2026-05-01T10:00:00Z',
-      cancelledAt: r.status==='CANCELLED'?'2026-05-29T08:00:00Z':'',
-      participants,
-    };
-  });
-
-  MOCK._participants = allParticipants;
-  return schedules;
-}
-
-MOCK.schedules = generateMockSchedules();
-
-const MOCK_AUDIT = [
-  { logId:'LOG-001', timestamp:'2026-05-30T09:15:00Z', action:'JOIN', actorName:'Maria Santos', targetType:'PARTICIPANT', targetId:'PRT-SCH-001-01', details:'{"scheduleId":"SCH-001","seats":1}' },
-  { logId:'LOG-002', timestamp:'2026-05-30T09:20:00Z', action:'JOIN', actorName:'Jose Reyes', targetType:'PARTICIPANT', targetId:'PRT-SCH-001-02', details:'{"scheduleId":"SCH-001","seats":2}' },
-  { logId:'LOG-003', timestamp:'2026-05-29T14:00:00Z', action:'CANCEL_SCHEDULE', actorName:'Admin', targetType:'SCHEDULE', targetId:'SCH-012', details:'{"reason":"cancelled"}' },
-  { logId:'LOG-004', timestamp:'2026-05-29T11:30:00Z', action:'CREATE_SCHEDULE', actorName:'Admin', targetType:'SCHEDULE', targetId:'SCH-011', details:'{"locationId":"LOC-01","slotId":"SLOT-03"}' },
-  { logId:'LOG-005', timestamp:'2026-05-28T16:45:00Z', action:'CANCEL', actorName:'Grace Tan', targetType:'PARTICIPANT', targetId:'PRT-SCH-002-03', details:'{"scheduleId":"SCH-002"}' },
-];
-
-// ─────────────────────────────────────────────
-// MOCK API
-// ─────────────────────────────────────────────
-function mockApiCall(action, params) {
-  return new Promise((resolve, reject) => {
-    setTimeout(() => {
-      try { resolve(handleMockAction(action, params)); }
-      catch(e) { reject(e); }
-    }, 200);
-  });
-}
-
-function handleMockAction(action, params) {
-  switch(action) {
-    case 'getSchedules': {
-      let list = [...MOCK.schedules];
-      if (params.locationId) list = list.filter(s => s.locationId === params.locationId);
-      if (params.dateFrom)   list = list.filter(s => s.date >= params.dateFrom);
-      if (params.dateTo)     list = list.filter(s => s.date <= params.dateTo);
-      return list.sort((a,b) => a.date.localeCompare(b.date) || a.slotStart.localeCompare(b.slotStart));
-    }
-    case 'getLocations':
-      return params.includeInactive === 'true' ? MOCK.locations : MOCK.locations.filter(l => l.isActive);
-    case 'getTimeSlots':
-      return MOCK.timeSlots.filter(s => s.isActive).sort((a,b) => a.sortOrder - b.sortOrder);
-    case 'getParticipants': {
-      const sch = MOCK.schedules.find(s => s.scheduleId === params.scheduleId);
-      return sch ? sch.participants : [];
-    }
-    case 'getConfig':
-      return STATE.config;
-    case 'getAuditLog':
-      if (params.adminCode !== '2026Admin') throw new Error('Invalid admin code');
-      return MOCK_AUDIT;
-    case 'verifyAdmin':
-      return { isAdmin: params.adminCode === '2026Admin' };
-    case 'joinSchedule': {
-      const sch = MOCK.schedules.find(s => s.scheduleId === params.scheduleId);
-      if (!sch) throw new Error('Schedule not found');
-      if (sch.status === 'CANCELLED') throw new Error('This schedule has been cancelled');
-      const name = (params.name || '').trim();
-      if (!name) throw new Error('Name is required');
-      // Duplicate check
-      const dup = sch.participants.find(p =>
-        (p.status === 'ACTIVE' || p.status === 'WAITLISTED' || p.status === 'PROMOTED') &&
-        p.name.toLowerCase() === name.toLowerCase()
-      );
-      if (dup) throw new Error('You are already registered for this schedule');
-      // Conflict check
-      const conflicting = MOCK.schedules.find(s =>
-        s.scheduleId !== params.scheduleId &&
-        s.date === sch.date &&
-        s.slotId === sch.slotId &&
-        s.status === 'OPEN' &&
-        s.participants.some(p =>
-          (p.status === 'ACTIVE'||p.status==='PROMOTED') &&
-          p.name.toLowerCase() === name.toLowerCase()
-        )
-      );
-      if (conflicting) throw new Error(`Conflict: you're already registered at ${conflicting.locationName} during this time slot`);
-
-      const seatsHeld = params.companion ? 2 : 1;
-      const pid = `PRT-${sch.scheduleId}-${Date.now()}`;
-      const isWaitlisted = sch.seatsUsed + seatsHeld > sch.capacity;
-      const wlPos = isWaitlisted ? sch.participants.filter(p => p.status==='WAITLISTED').length + 1 : null;
-      const newPart = {
-        participantId: pid, scheduleId: sch.scheduleId,
-        name, companion: params.companion || '',
-        seatsHeld, status: isWaitlisted ? 'WAITLISTED' : 'ACTIVE',
-        waitlistPosition: wlPos, joinedAt: new Date().toISOString(),
-        cancelledAt:'', promotedAt:'',
-      };
-      sch.participants.push(newPart);
-      if (!isWaitlisted) {
-        sch.seatsUsed += seatsHeld;
-        refreshScheduleStatus(sch);
-      }
-      return { participantId: pid, status: newPart.status, waitlistPosition: wlPos };
-    }
-    case 'cancelParticipation': {
-      let found = null, foundSch = null;
-      for (const sch of MOCK.schedules) {
-        const p = sch.participants.find(p => p.participantId === params.participantId);
-        if (p) { found = p; foundSch = sch; break; }
-      }
-      if (!found) throw new Error('Registration not found');
-      if (found.name.toLowerCase() !== (params.name||'').toLowerCase()) throw new Error('Name does not match registration');
-      found.status = 'CANCELLED';
-      found.cancelledAt = new Date().toISOString();
-      foundSch.seatsUsed = Math.max(0, foundSch.seatsUsed - found.seatsHeld);
-      // Promote waitlisted
-      const promoted = [];
-      const waitlisted = foundSch.participants.filter(p => p.status==='WAITLISTED').sort((a,b) => a.waitlistPosition - b.waitlistPosition);
-      for (const wp of waitlisted) {
-        if (foundSch.seatsUsed + wp.seatsHeld <= foundSch.capacity) {
-          wp.status = 'PROMOTED'; wp.promotedAt = new Date().toISOString(); wp.waitlistPosition = '';
-          foundSch.seatsUsed += wp.seatsHeld;
-          promoted.push(wp.name);
-        }
-      }
-      // Renumber remaining
-      foundSch.participants.filter(p=>p.status==='WAITLISTED').forEach((p,i) => p.waitlistPosition = i+1);
-      refreshScheduleStatus(foundSch);
-      return { cancelled: true, promoted };
-    }
-    case 'createSchedule': {
-      const loc = MOCK.locations.find(l => l.locationId === params.locationId);
-      const slot = MOCK.timeSlots.find(s => s.slotId === params.slotId);
-      if (!loc || !slot) throw new Error('Invalid location or time slot');
-      const dup = MOCK.schedules.find(s => s.locationId===params.locationId && s.slotId===params.slotId && s.date===params.date && s.status==='OPEN');
-      if (dup) throw new Error('A schedule already exists for this location, date, and time slot');
-      const schId = `SCH-${Date.now().toString(36).toUpperCase()}`;
-      const newSch = {
-        scheduleId:schId, locationId:loc.locationId, slotId:slot.slotId, date:params.date,
-        capacity:loc.capacity, seatsUsed:0, status:'OPEN', availabilityStatus:'AVAILABLE',
-        locationName:loc.name, locationAddress:loc.address, mapsUrl:loc.mapsUrl,
-        slotLabel:slot.label, slotStart:slot.startTime, slotEnd:slot.endTime,
-        createdBy:params.createdBy||'Admin', createdAt:new Date().toISOString(),
-        cancelledAt:'', participants:[],
-      };
-      MOCK.schedules.push(newSch);
-      return { scheduleId: schId };
-    }
-    case 'cancelSchedule': {
-      if (params.adminCode !== '2026Admin') throw new Error('Invalid admin code');
-      const sch = MOCK.schedules.find(s => s.scheduleId === params.scheduleId);
-      if (!sch) throw new Error('Schedule not found');
-      sch.status = 'CANCELLED'; sch.availabilityStatus = 'CANCELLED';
-      sch.cancelledAt = new Date().toISOString(); sch.cancelledBy = params.cancelledBy;
-      return { cancelled: true };
-    }
-    case 'createLocation': {
-      if (params.adminCode !== '2026Admin') throw new Error('Invalid admin code');
-      const locId = `LOC-${Date.now().toString(36).toUpperCase()}`;
-      const newLoc = { locationId:locId, name:params.name, address:params.address||'', capacity:Number(params.capacity)||6, mapsUrl:params.mapsUrl||'', isActive:true };
-      MOCK.locations.push(newLoc);
-      return { locationId: locId };
-    }
-    case 'updateLocation': {
-      if (params.adminCode !== '2026Admin') throw new Error('Invalid admin code');
-      const loc = MOCK.locations.find(l => l.locationId === params.locationId);
-      if (!loc) throw new Error('Location not found');
-      if (params.name !== undefined) loc.name = params.name;
-      if (params.address !== undefined) loc.address = params.address;
-      if (params.capacity !== undefined) loc.capacity = Number(params.capacity);
-      if (params.mapsUrl !== undefined) loc.mapsUrl = params.mapsUrl;
-      if (params.isActive !== undefined) loc.isActive = params.isActive === 'true' || params.isActive === true;
-      return { updated: true };
-    }
-    case 'createTimeSlot': {
-      if (params.adminCode !== '2026Admin') throw new Error('Invalid admin code');
-      const slotId = `SLOT-${Date.now().toString(36).toUpperCase()}`;
-      MOCK.timeSlots.push({ slotId, label:params.label, startTime:params.startTime, endTime:params.endTime, isActive:true, sortOrder:Number(params.sortOrder)||99 });
-      return { slotId };
-    }
-    case 'updateTimeSlot': {
-      if (params.adminCode !== '2026Admin') throw new Error('Invalid admin code');
-      const slot = MOCK.timeSlots.find(s => s.slotId === params.slotId);
-      if (!slot) throw new Error('Time slot not found');
-      if (params.label !== undefined) slot.label = params.label;
-      if (params.startTime !== undefined) slot.startTime = params.startTime;
-      if (params.endTime !== undefined) slot.endTime = params.endTime;
-      if (params.sortOrder !== undefined) slot.sortOrder = Number(params.sortOrder);
-      if (params.isActive !== undefined) slot.isActive = params.isActive === 'true' || params.isActive === true;
-      return { updated: true };
-    }
-    case 'exportReport': {
-      if (params.adminCode !== '2026Admin') throw new Error('Invalid admin code');
-      let rows = [['Schedule ID','Location','Date','Slot','Capacity','Seats Used','Status']];
-      for (const s of MOCK.schedules) {
-        rows.push([s.scheduleId, s.locationName, s.date, s.slotLabel, s.capacity, s.seatsUsed, s.status]);
-      }
-      return { csvContent: rows.map(r => r.map(c => `"${String(c).replace(/"/g,'""')}"`).join(',')).join('\n') };
-    }
-    default:
-      throw new Error(`Unknown action: ${action}`);
-  }
-}
-
-function refreshScheduleStatus(sch) {
-  const t = STATE.config.nearlyFullThreshold || 0.75;
-  if (sch.status === 'CANCELLED') { sch.availabilityStatus = 'CANCELLED'; return; }
-  if (sch.seatsUsed >= sch.capacity) sch.availabilityStatus = 'FULL';
-  else if (sch.seatsUsed / sch.capacity >= t) sch.availabilityStatus = 'NEARLY_FULL';
-  else sch.availabilityStatus = 'AVAILABLE';
-}
 
 // ─────────────────────────────────────────────
 // API
 // ─────────────────────────────────────────────
 async function apiCall(action, params = {}, method = 'GET') {
-  if (CONFIG.MOCK_MODE) return mockApiCall(action, params);
   let response;
   if (method === 'GET') {
     const qs = new URLSearchParams({ action, ...params }).toString();
@@ -609,6 +308,23 @@ function occPct(used, cap) { return cap ? Math.min(100, Math.round(used/cap*100)
 function initials(name) { return name.split(' ').map(w=>w[0]).join('').slice(0,2).toUpperCase(); }
 function escHtml(str) { return String(str||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function getLocation(id) { return STATE.locations.find(l => l.locationId === id); }
+
+// Returns an error string if date+slotId falls during a congregation meeting, null otherwise.
+// Midweek: Thursday 6:00–8:00 PM  |  Weekend: Sunday 3:00–5:00 PM
+function getMeetingConflict(date, slotId) {
+  if (!date || !slotId) return null;
+  const slot = STATE.timeSlots.find(s => s.slotId === slotId);
+  if (!slot || !slot.startTime || !slot.endTime) return null;
+  const parts = date.split('-');
+  const day = new Date(+parts[0], +parts[1] - 1, +parts[2]).getDay(); // 0=Sun, 4=Thu
+  const toMins = t => { const [h, m] = String(t).split(':').map(Number); return h * 60 + (m || 0); };
+  const s = toMins(slot.startTime), e = toMins(slot.endTime);
+  if (day === 4 && s < 20 * 60 && e > 18 * 60)
+    return 'This time overlaps with the midweek meeting (Thursday 6–8 PM).';
+  if (day === 0 && s < 17 * 60 && e > 15 * 60)
+    return 'This time overlaps with the weekend meeting (Sunday 3–5 PM).';
+  return null;
+}
 function getSlot(id) { return STATE.timeSlots.find(s => s.slotId === id); }
 function getSchedule(id) { return STATE.schedules.find(s => s.scheduleId === id); }
 
@@ -647,15 +363,6 @@ function render() {
   restoreInputValues();
 }
 
-// ─────────────────────────────────────────────
-// SETUP BANNER
-// ─────────────────────────────────────────────
-function renderSetupBanner() {
-  if (CONFIG.API_URL !== 'YOUR_GAS_WEB_APP_URL') return '';
-  return `<div class="setup-banner">
-    <strong>Mock Mode Active</strong> — Real data will load once you paste your Google Apps Script URL into <code>CONFIG.API_URL</code> in index.html and set <code>MOCK_MODE: false</code>.
-  </div>`;
-}
 
 // ─────────────────────────────────────────────
 // HOME VIEW
@@ -669,7 +376,6 @@ function renderHomeView() {
       <p style="color:rgba(255,255,255,.7);font-size:13px;margin-top:5px;text-shadow:0 1px 6px rgba(0,0,0,.3)">${formatDate(isoToday())}</p>
     </div>
   </div>
-  ${renderSetupBanner()}
   <div class="px-4 mt-0">
     ${renderFilterBar()}
     ${renderTabSwitcher()}
@@ -1682,6 +1388,17 @@ async function handleSubmitCreateSchedule() {
   if (!date)       { showToast('Please select a date', 'error');          document.getElementById('cs-date')?.focus();     return; }
   if (!slotId)     { showToast('Please select a time slot', 'error');     document.getElementById('cs-slot')?.focus();     return; }
 
+  // Meeting time block
+  const meetingConflict = getMeetingConflict(date, slotId);
+  if (meetingConflict) {
+    if (conflictEl) conflictEl.innerHTML = `
+      <div class="p-3 rounded-xl mb-3" style="background:#FEE2E2;border:1px solid #FECACA">
+        <p class="text-sm font-semibold" style="color:#991B1B">Congregation meeting</p>
+        <p class="text-xs mt-0.5" style="color:#991B1B">${escHtml(meetingConflict)}</p>
+      </div>`;
+    return;
+  }
+
   // Client-side conflict check before hitting API
   const existing = STATE.schedules.find(s =>
     s.locationId === locationId && s.slotId === slotId && s.date === date && s.status === 'OPEN'
@@ -1721,6 +1438,8 @@ async function handleAdminCreateSchedule() {
   const slotId = document.getElementById('new-sch-slot')?.value;
   const date = document.getElementById('new-sch-date')?.value;
   if (!locationId||!slotId||!date) { showToast('All fields required', 'error'); return; }
+  const adminMeetingConflict = getMeetingConflict(date, slotId);
+  if (adminMeetingConflict) { showToast(adminMeetingConflict, 'error'); return; }
   try {
     await apiCall('createSchedule', { adminCode:STATE.adminCode, locationId, slotId, date, createdBy:'Admin' }, 'POST');
     const fresh = await apiCall('getSchedules');
@@ -1772,10 +1491,7 @@ async function init() {
     STATE.locations  = locations;
     STATE.timeSlots  = timeSlots;
   } catch(err) {
-    showToast('Failed to load data. Using demo data.', 'error');
-    STATE.schedules = MOCK.schedules;
-    STATE.locations = MOCK.locations.filter(l=>l.isActive);
-    STATE.timeSlots = MOCK.timeSlots.filter(s=>s.isActive);
+    showToast('Failed to load data. Please check your connection and try again.', 'error');
   }
   render();
 }
