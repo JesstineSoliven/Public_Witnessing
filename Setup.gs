@@ -177,6 +177,25 @@ function dispatch(action, p) {
 
 // ─── Sheet helpers ────────────────────────────────────────────────────────
 
+// GAS reads date/time cells back as JS Date objects, not strings.
+// These helpers normalise them to the formats the frontend expects.
+function fmtDate(v) {
+  if (!v && v !== 0) return '';
+  if (v instanceof Date) {
+    const y = v.getFullYear(), m = v.getMonth() + 1, d = v.getDate();
+    return y + '-' + String(m).padStart(2, '0') + '-' + String(d).padStart(2, '0');
+  }
+  return String(v);
+}
+
+function fmtTime(v) {
+  if (!v && v !== 0) return '';
+  if (v instanceof Date) {
+    return String(v.getHours()).padStart(2, '0') + ':' + String(v.getMinutes()).padStart(2, '0');
+  }
+  return String(v);
+}
+
 function getSpreadsheet() {
   return SpreadsheetApp.openById(getSpreadsheetId());
 }
@@ -314,7 +333,8 @@ function updateLocation(p) {
 function getTimeSlots(p) {
   return sheetToObjects(getSheet(SHEETS.TIMESLOTS))
     .filter(r => String(r.isActive) === 'TRUE' || r.isActive === true)
-    .sort((a, b) => (parseInt(a.sortOrder)||0) - (parseInt(b.sortOrder)||0));
+    .sort((a, b) => (parseInt(a.sortOrder)||0) - (parseInt(b.sortOrder)||0))
+    .map(r => ({ ...r, startTime: fmtTime(r.startTime), endTime: fmtTime(r.endTime) }));
 }
 
 function createTimeSlot(p) {
@@ -373,11 +393,11 @@ function getSchedules(p) {
     }));
     return {
       scheduleId: s.scheduleId, locationId: s.locationId, slotId: s.slotId,
-      date: String(s.date), capacity: parseInt(s.capacity)||6, seatsUsed: parseInt(s.seatsUsed)||0,
+      date: fmtDate(s.date), capacity: parseInt(s.capacity)||6, seatsUsed: parseInt(s.seatsUsed)||0,
       status: s.status,
       availabilityStatus: s.status === 'CANCELLED' ? 'CANCELLED' : computeStatus(s.seatsUsed, s.capacity, threshold),
       locationName: loc.name||'', locationAddress: loc.address||'', mapsUrl: loc.mapsUrl||'',
-      slotLabel: slot.label||'', slotStart: slot.startTime||'', slotEnd: slot.endTime||'',
+      slotLabel: slot.label||'', slotStart: fmtTime(slot.startTime)||'', slotEnd: fmtTime(slot.endTime)||'',
       createdBy: s.createdBy||'', createdAt: s.createdAt||'',
       cancelledAt: s.cancelledAt||'', participants: pList,
     };
@@ -390,7 +410,7 @@ function checkMeetingConflict(date, slotId) {
   if (!slot) return;
   const parts = date.split('-');
   const day = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])).getDay();
-  const toMins = function(t) { const hm = String(t).split(':'); return parseInt(hm[0]) * 60 + (parseInt(hm[1]) || 0); };
+  const toMins = function(t) { const hm = fmtTime(t).split(':'); return parseInt(hm[0]) * 60 + (parseInt(hm[1]) || 0); };
   const s = toMins(slot.startTime), e = toMins(slot.endTime);
   if (day === 4 && s < 20 * 60 && e > 18 * 60)
     throw new Error('Cannot schedule during the midweek meeting (Thursday 6–8 PM)');
@@ -406,7 +426,7 @@ function createSchedule(p) {
   if (locRow === -1) throw new Error('Location not found');
   const loc = getRowObject(locSh, locRow);
   const existing = sheetToObjects(getSheet(SHEETS.SCHEDULES));
-  if (existing.find(s => s.locationId===p.locationId && s.slotId===p.slotId && String(s.date)===p.date && s.status==='OPEN'))
+  if (existing.find(s => s.locationId===p.locationId && s.slotId===p.slotId && fmtDate(s.date)===p.date && s.status==='OPEN'))
     throw new Error('A schedule already exists for this location, date, and time slot');
   const id = generateId('SCH');
   getSheet(SHEETS.SCHEDULES).appendRow([id, p.locationId, p.slotId, p.date, parseInt(loc.capacity)||6, 0, 'OPEN', p.createdBy||'Admin', nowIso(), '', '']);
